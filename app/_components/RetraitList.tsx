@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, Search } from "lucide-react"
+import { Plus, Pencil, Trash2, Loader2, Check, ChevronsUpDown, ChevronLeft, ChevronRight, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -27,51 +26,66 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useToast } from "@/hooks/use-toast"
 import { fetchApi } from "@/lib/api-config"
+import { cn } from "@/lib/utils"
+
+interface Withdrawal {
+  nRetrait: number
+  nCheque: string
+  nCompte: string
+  montant: number
+}
+
+interface WithdrawalFormData {
+  nCheque: string
+  nCompte: string
+  montant: number
+}
 
 interface Client {
   nCompte: string
   nomClient: string
-  solde: number
-  // Add other client properties as needed
 }
 
-interface ClientFormData {
-  nCompte: string
-  nomClient: string
-  // Add other form fields as needed
-}
+const PAGE_SIZE = 4
 
-const itemsPerPage = 4
-
-export default function ClientList() {
+export default function WithdrawalList() {
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
-  const [formData, setFormData] = useState<ClientFormData>({
+  const [selectedWithdrawal, setSelectedWithdrawal] = useState<Withdrawal | null>(null)
+  const [formData, setFormData] = useState<WithdrawalFormData>({
+    nCheque: "",
     nCompte: "",
-    nomClient: "",
+    montant: 0,
   })
   const [currentPage, setCurrentPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState("")
   const { toast } = useToast()
 
-  // Fetch clients on component mount
+  const filteredWithdrawals = withdrawals.filter((withdrawal) =>
+    withdrawal.nCompte.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
+
+  // Fetch withdrawals and clients on component mount
   useEffect(() => {
+    fetchWithdrawals()
     fetchClients()
   }, [])
 
-  // Function to fetch clients
-  const fetchClients = async () => {
+  // Function to fetch withdrawals
+  const fetchWithdrawals = async () => {
     try {
-      const data = await fetchApi<Client[]>("/clients")
-      // Sort clients by name
-      const sortedClients = data.sort((a, b) => a.nomClient.localeCompare(b.nomClient))
-      setClients(sortedClients)
+      const data = await fetchApi<Withdrawal[]>("/retraits")
+      // Sort withdrawals by nRetrait (assuming it's a number)
+      const sortedWithdrawals = data.sort((a, b) => a.nRetrait - b.nRetrait)
+      setWithdrawals(sortedWithdrawals)
       setError(null)
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : "An unknown error occurred"
@@ -86,12 +100,35 @@ export default function ClientList() {
     }
   }
 
+  // Function to fetch clients
+  const fetchClients = async () => {
+    try {
+      const data = await fetchApi<Client[]>("/clients")
+      setClients(data)
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : "An unknown error occurred"
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to fetch clients: ${errorMessage}`,
+      })
+    }
+  }
+
   // Handle form input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: name === "montant" ? (value === "" ? 0 : Number.parseFloat(value)) : value,
+    }))
+  }
+
+  // Handle account selection
+  const handleAccountSelect = (value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      nCompte: value,
     }))
   }
 
@@ -99,29 +136,29 @@ export default function ClientList() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     try {
-      if (selectedClient) {
-        // Update existing client
-        await fetchApi(`/clients/${selectedClient.nCompte}`, {
+      if (selectedWithdrawal) {
+        // Update existing withdrawal
+        await fetchApi(`/retraits/${selectedWithdrawal.nRetrait}`, {
           method: "PUT",
           body: JSON.stringify(formData),
         })
         toast({
           title: "Success",
-          description: "Client updated successfully",
+          description: "Withdrawal updated successfully",
         })
       } else {
-        // Create new client
-        await fetchApi("/clients", {
+        // Create new withdrawal
+        await fetchApi("/retraits", {
           method: "POST",
           body: JSON.stringify(formData),
         })
         toast({
           title: "Success",
-          description: "Client created successfully",
+          description: "Withdrawal created successfully",
         })
       }
-      // Refresh the clients list
-      await fetchClients()
+      // Refresh the withdrawals list
+      await fetchWithdrawals()
       // Reset form and close modal
       handleCloseModal()
     } catch (error) {
@@ -134,66 +171,68 @@ export default function ClientList() {
   }
 
   // Handle edit button click
-  const handleEdit = (client: Client) => {
-    setSelectedClient(client)
+  const handleEdit = (withdrawal: Withdrawal) => {
+    setSelectedWithdrawal(withdrawal)
     setFormData({
-      nCompte: client.nCompte,
-      nomClient: client.nomClient,
+      nCheque: withdrawal.nCheque,
+      nCompte: withdrawal.nCompte,
+      montant: withdrawal.montant,
     })
     setIsModalOpen(true)
   }
 
   // Handle delete confirmation
-  const handleDelete = async (client: Client) => {
+  const handleDelete = async (withdrawal: Withdrawal) => {
     try {
       // Close the dialog immediately
       setIsDeleteDialogOpen(false)
-      setSelectedClient(null)
+      setSelectedWithdrawal(null)
 
       // Optimistically update the UI
-      setClients((prevClients) => prevClients.filter((c) => c.nCompte !== client.nCompte))
+      setWithdrawals((prevWithdrawals) => prevWithdrawals.filter((w) => w.nRetrait !== withdrawal.nRetrait))
 
       // Perform the deletion
-      await fetchApi(`/clients/${client.nCompte}`, {
+      await fetchApi(`/retraits/${withdrawal.nRetrait}`, {
         method: "DELETE",
       })
 
       // Show success message
       toast({
         title: "Success",
-        description: `Client ${client.nomClient} deleted successfully`,
+        description: `Withdrawal #${withdrawal.nRetrait} deleted successfully`,
       })
 
-      // Refresh the clients list in the background
-      fetchClients()
+      // Refresh the withdrawals list in the background
+      fetchWithdrawals()
     } catch (error) {
       // Show error message
       toast({
-        title: "Success",
-        description: "Client deleted successfully",
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete withdrawal",
       })
 
       // Revert the optimistic update
-      fetchClients()
+      fetchWithdrawals()
     }
   }
 
   // Handle modal close
   const handleCloseModal = () => {
     setIsModalOpen(false)
-    setSelectedClient(null)
+    setSelectedWithdrawal(null)
     setFormData({
+      nCheque: "",
       nCompte: "",
-      nomClient: "",
+      montant: 0,
     })
   }
 
-  const filteredClients = clients.filter((client) => client.nomClient.toLowerCase().includes(searchTerm.toLowerCase()))
-
-  const indexOfLastItem = currentPage * itemsPerPage
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage
-  const currentClients = filteredClients.slice(indexOfFirstItem, indexOfLastItem)
-  const totalPages = Math.ceil(filteredClients.length / itemsPerPage)
+  // Pagination helpers
+  const indexOfLastItem = currentPage * PAGE_SIZE
+  const indexOfFirstItem = indexOfLastItem - PAGE_SIZE
+  const paginatedWithdrawals = filteredWithdrawals.slice(indexOfFirstItem, indexOfLastItem)
+  const totalPages = Math.ceil(filteredWithdrawals.length / PAGE_SIZE)
 
   // Loading state
   if (loading) {
@@ -201,7 +240,7 @@ export default function ClientList() {
       <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
         <div className="flex items-center space-x-2">
           <Loader2 className="h-6 w-6 animate-spin" />
-          <p className="text-lg">Loading clients...</p>
+          <p className="text-lg">Loading withdrawals...</p>
         </div>
       </div>
     )
@@ -224,14 +263,14 @@ export default function ClientList() {
       {/* Header section */}
       <div className="flex items-center justify-between space-x-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Clients</h2>
-          <p className="text-muted-foreground">Manage client accounts</p>
+          <h2 className="text-3xl font-bold tracking-tight">Withdrawals</h2>
+          <p className="text-muted-foreground">Manage client withdrawals and transactions</p>
         </div>
         <div className="flex items-center space-x-2">
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search clients..."
+              placeholder="Search by account number..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-8"
@@ -241,46 +280,90 @@ export default function ClientList() {
             <DialogTrigger asChild>
               <Button
                 onClick={() => {
-                  setSelectedClient(null)
-                  setFormData({ nCompte: "", nomClient: "" })
+                  setSelectedWithdrawal(null)
+                  setFormData({ nCheque: "", nCompte: "", montant: 0 })
                 }}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                New Client
+                New Withdrawal
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>{selectedClient ? "Edit Client" : "New Client"}</DialogTitle>
+                <DialogTitle>{selectedWithdrawal ? "Edit Withdrawal" : "New Withdrawal"}</DialogTitle>
                 <DialogDescription>
-                  {selectedClient ? "Edit client details below" : "Enter client details below"}
+                  {selectedWithdrawal ? "Edit withdrawal details below" : "Enter withdrawal details below"}
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="nCompte">Account Number</Label>
+                  <Label htmlFor="nCheque">Check Number</Label>
                   <Input
-                    id="nCompte"
-                    name="nCompte"
-                    placeholder="Enter account number"
-                    value={formData.nCompte}
+                    id="nCheque"
+                    name="nCheque"
+                    placeholder="Enter check number"
+                    value={formData.nCheque}
                     onChange={handleInputChange}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="nomClient">Client Name</Label>
+                  <Label htmlFor="nCompte">Account Number</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className={cn("w-full justify-between", !formData.nCompte && "text-muted-foreground")}
+                      >
+                        {formData.nCompte
+                          ? clients.find((client) => client.nCompte === formData.nCompte)?.nCompte
+                          : "Select account number"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0">
+                      <Command>
+                        <CommandInput placeholder="Search account number..." />
+                        <CommandList>
+                          <CommandEmpty>No account number found.</CommandEmpty>
+                          <CommandGroup>
+                            {clients.map((client) => (
+                              <CommandItem
+                                key={client.nCompte}
+                                value={client.nCompte}
+                                onSelect={() => handleAccountSelect(client.nCompte)}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    formData.nCompte === client.nCompte ? "opacity-100" : "opacity-0",
+                                  )}
+                                />
+                                {client.nCompte} - {client.nomClient}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="montant">Amount</Label>
                   <Input
-                    id="nomClient"
-                    name="nomClient"
-                    placeholder="Enter client name"
-                    value={formData.nomClient}
+                    id="montant"
+                    name="montant"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={formData.montant === 0 ? "" : formData.montant}
                     onChange={handleInputChange}
                     required
                   />
                 </div>
                 <Button type="submit" className="w-full">
-                  {selectedClient ? "Update" : "Create"} Client
+                  {selectedWithdrawal ? "Update" : "Create"} Withdrawal
                 </Button>
               </form>
             </DialogContent>
@@ -292,63 +375,71 @@ export default function ClientList() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Withdrawals</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{clients.length}</div>
+            <div className="text-2xl font-bold">{filteredWithdrawals.length}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Balance</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Amount</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${clients.reduce((sum, client) => sum + client.solde, 0).toFixed(2)}
+              ${filteredWithdrawals.reduce((sum, withdrawal) => sum + withdrawal.montant, 0).toFixed(2)}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average Balance</CardTitle>
+            <CardTitle className="text-sm font-medium">Average Amount</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${(clients.reduce((sum, client) => sum + client.solde, 0) / (clients.length || 1)).toFixed(2)}
+              $
+              {(
+                filteredWithdrawals.reduce((sum, withdrawal) => sum + withdrawal.montant, 0) /
+                (filteredWithdrawals.length || 1)
+              ).toFixed(2)}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Clients Table */}
+      {/* Withdrawals Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Client List</CardTitle>
-          <CardDescription>A list of all client accounts</CardDescription>
+          <CardTitle>Withdrawal History</CardTitle>
+          <CardDescription>A list of all withdrawals and their details</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Withdrawal ID</TableHead>
+                <TableHead>Check Number</TableHead>
                 <TableHead>Account Number</TableHead>
-                <TableHead>Client Name</TableHead>
+                <TableHead>Amount</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {currentClients.map((client) => (
-                <TableRow key={client.nCompte}>
-                  <TableCell className="font-medium">{client.nCompte}</TableCell>
-                  <TableCell>{client.nomClient}</TableCell>
+              {paginatedWithdrawals.map((withdrawal) => (
+                <TableRow key={withdrawal.nRetrait}>
+                  <TableCell className="font-medium">{withdrawal.nRetrait}</TableCell>
+                  <TableCell>{withdrawal.nCheque}</TableCell>
+                  <TableCell>{withdrawal.nCompte}</TableCell>
+                  <TableCell>${withdrawal.montant.toFixed(2)}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(client)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(withdrawal)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => {
-                        setSelectedClient(client)
+                        setSelectedWithdrawal(withdrawal)
                         setIsDeleteDialogOpen(true)
                       }}
                     >
@@ -391,23 +482,23 @@ export default function ClientList() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the client account for{" "}
-              {selectedClient?.nomClient} and remove its data from the system.
+              This action cannot be undone. This will permanently delete withdrawal #{selectedWithdrawal?.nRetrait} and
+              remove its data from the system.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel
               onClick={() => {
                 setIsDeleteDialogOpen(false)
-                setSelectedClient(null)
+                setSelectedWithdrawal(null)
               }}
             >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (selectedClient) {
-                  handleDelete(selectedClient)
+                if (selectedWithdrawal) {
+                  handleDelete(selectedWithdrawal)
                 }
               }}
               className="bg-red-600 hover:bg-red-700"

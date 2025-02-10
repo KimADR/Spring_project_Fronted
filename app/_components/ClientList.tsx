@@ -40,6 +40,7 @@ interface Client {
 interface ClientFormData {
   nCompte: string
   nomClient: string
+  solde?: number
   // Add other form fields as needed
 }
 
@@ -91,7 +92,7 @@ export default function ClientList() {
     const { name, value } = e.target
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: name === "solde" ? Number.parseFloat(value) || 0 : value,
     }))
   }
 
@@ -139,6 +140,7 @@ export default function ClientList() {
     setFormData({
       nCompte: client.nCompte,
       nomClient: client.nomClient,
+      solde: client.solde,
     })
     setIsModalOpen(true)
   }
@@ -170,7 +172,7 @@ export default function ClientList() {
       // Show error message
       toast({
         title: "Success",
-        description: "Client deleted successfully",
+        description: `Client ${client.nomClient} deleted successfully`,
       })
 
       // Revert the optimistic update
@@ -185,6 +187,7 @@ export default function ClientList() {
     setFormData({
       nCompte: "",
       nomClient: "",
+      solde: 0,
     })
   }
 
@@ -242,7 +245,7 @@ export default function ClientList() {
               <Button
                 onClick={() => {
                   setSelectedClient(null)
-                  setFormData({ nCompte: "", nomClient: "" })
+                  setFormData({ nCompte: "", nomClient: "", solde: 0 })
                 }}
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -266,6 +269,7 @@ export default function ClientList() {
                     value={formData.nCompte}
                     onChange={handleInputChange}
                     required
+                    disabled={!!selectedClient}
                   />
                 </div>
                 <div className="space-y-2">
@@ -279,6 +283,19 @@ export default function ClientList() {
                     required
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="solde">Balance</Label>
+                  <Input
+                    id="solde"
+                    name="solde"
+                    type="number"
+                    step="0.01"
+                    placeholder="Enter initial balance"
+                    value={formData.solde}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
                 <Button type="submit" className="w-full">
                   {selectedClient ? "Update" : "Create"} Client
                 </Button>
@@ -288,8 +305,8 @@ export default function ClientList() {
         </div>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+       {/* Statistics Cards */}
+       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
@@ -332,6 +349,7 @@ export default function ClientList() {
               <TableRow>
                 <TableHead>Account Number</TableHead>
                 <TableHead>Client Name</TableHead>
+                <TableHead>Balance</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -340,6 +358,7 @@ export default function ClientList() {
                 <TableRow key={client.nCompte}>
                   <TableCell className="font-medium">{client.nCompte}</TableCell>
                   <TableCell>{client.nomClient}</TableCell>
+                  <TableCell>${client.solde.toFixed(2)}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(client)}>
                       <Pencil className="h-4 w-4" />

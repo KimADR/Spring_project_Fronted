@@ -200,9 +200,9 @@ export default function AuditRetraitView() {
             <ChevronLeft className="h-4 w-4 mr-2" />
             Previous
           </Button>
-          <div>
+          {/* <div>
             Page {currentPage} of {totalPages}
-          </div>
+          </div> */}
           <Button
             variant="outline"
             size="sm"

@@ -27,6 +27,11 @@ const routes = [
     icon: History,
     href: "/auditRetrait",
   },
+  {
+    label: "Withdrawal History",
+    icon: History,
+    href: "/withdrawal-history",
+  },
 ]
 
 export function Sidebar() {

@@ -21,7 +21,7 @@ interface AuditRetrait {
   utilisateur: string
 }
 
-const PAGE_SIZE = 7
+const PAGE_SIZE = 5
 
 export default function AuditRetraitView() {
   const [auditLogs, setAuditLogs] = useState<AuditRetrait[]>([])

@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Users, History, BanknoteIcon, LogOut } from "lucide-react"
+import { LayoutDashboard, Users, History, BanknoteIcon, LogOut, FileSearch } from "lucide-react"
 
 const routes = [
   {
@@ -24,7 +24,7 @@ const routes = [
   },
   {
     label: "Audit Trail",
-    icon: History,
+    icon: FileSearch,
     href: "/auditRetrait",
   },
   {
